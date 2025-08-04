@@ -17,25 +17,35 @@ console.log('BOOT cwd  =', process.cwd())
 const __filename = fileURLToPath(import.meta.url)
 const __dirname  = path.dirname(__filename)
 
-const PORT = process.env.PORT || 4000
-const SERVER_BASE_URL = process.env.SERVER_BASE_URL || `http://127.0.0.1:${PORT}`
-const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || 'http://127.0.0.1:5174'
+
 
 
 // ── App & middlewares (⚠️ app doit être créé AVANT app.use/app.post)
 const app = express()
+// derrière le proxy Render pour avoir le bon protocole (https)
+app.set('trust proxy', 1)
 
-// CORS souple dev
-const PROD_ORIGIN = process.env.PUBLIC_BASE_URL // ex: https://bat-client.onrender.com
-app.use(cors({
+// utilitaire: base URL publique
+const getBaseUrl = (req) =>
+  process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`
+
+
+// CORS (dev souple + prod strict)
+const PROD_ORIGIN = process.env.PUBLIC_BASE_URL; // ex: https://bat-proof-1.onrender.com
+
+const corsOptions = {
   origin: (origin, cb) => {
     const ok =
-      !origin || // curl/health
-      /^http:\/\/(127\.0\.0\.1|localhost):517\d$/.test(origin) ||
-      (PROD_ORIGIN && origin === PROD_ORIGIN);
+      !origin || // curl/health checks
+      /^http:\/\/(127\.0\.0\.1|localhost):517\d$/.test(origin) || // Vite dev
+      (PROD_ORIGIN && origin === PROD_ORIGIN); // prod exact
     cb(ok ? null : new Error('CORS'), ok ? true : undefined);
-  }
-}));
+  },
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // préflight
+
 
 
 // Logger minimal
@@ -94,7 +104,8 @@ app.get('/health', (_req, res) => res.json({ ok: true }))
 // Upload PDF → URL publique
 app.post('/api/upload', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Aucun fichier' })
-  const url = `${SERVER_BASE_URL}/uploads/${req.file.filename}`
+    const base = getBaseUrl(req) 
+  const url  = `${base}/uploads/${req.file.filename}`
   console.log('ROUTE: /api/upload HIT ->', url)
   res.json({ url, fileName: req.file.originalname, size: req.file.size })
 })
