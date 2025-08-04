@@ -36,7 +36,7 @@ const corsOptions = {
   },
 }
 app.use(cors(corsOptions))
-app.options('*', cors(corsOptions))
+
 
 // Logger minimal
 app.use((req, _res, next) => {
