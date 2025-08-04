@@ -9,7 +9,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
-// ── BOOT logs pour vérifier le bon fichier/dossier
+// ── BOOT logs
 console.log('BOOT file =', new URL(import.meta.url).pathname)
 console.log('BOOT cwd  =', process.cwd())
 
@@ -17,36 +17,26 @@ console.log('BOOT cwd  =', process.cwd())
 const __filename = fileURLToPath(import.meta.url)
 const __dirname  = path.dirname(__filename)
 
+// ── Config
+const PORT = process.env.PORT ? Number(process.env.PORT) : 3000
+const PROD_ORIGIN = process.env.PUBLIC_BASE_URL // ex: https://bat-proof-1.onrender.com
 
-
-
-// ── App & middlewares (⚠️ app doit être créé AVANT app.use/app.post)
+// ── App & middlewares
 const app = express()
-// derrière le proxy Render pour avoir le bon protocole (https)
 app.set('trust proxy', 1)
 
-// utilitaire: base URL publique
-const getBaseUrl = (req) =>
-  process.env.SERVER_BASE_URL || `${req.protocol}://${req.get('host')}`
-
-
 // CORS (dev souple + prod strict)
-const PROD_ORIGIN = process.env.PUBLIC_BASE_URL; // ex: https://bat-proof-1.onrender.com
-
 const corsOptions = {
   origin: (origin, cb) => {
     const ok =
       !origin || // curl/health checks
       /^http:\/\/(127\.0\.0\.1|localhost):517\d$/.test(origin) || // Vite dev
-      (PROD_ORIGIN && origin === PROD_ORIGIN); // prod exact
-    cb(ok ? null : new Error('CORS'), ok ? true : undefined);
+      (PROD_ORIGIN && origin === PROD_ORIGIN) // prod exact
+    cb(ok ? null : new Error('CORS'), ok ? true : undefined)
   },
-};
-
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // préflight
-
-
+}
+app.use(cors(corsOptions))
+app.options('*', cors(corsOptions))
 
 // Logger minimal
 app.use((req, _res, next) => {
@@ -92,8 +82,9 @@ CREATE TABLE IF NOT EXISTS annotations (
 `)
 
 // ── Helpers
-function buildClientUrl(id){
-  return `${PUBLIC_BASE_URL}/?mode=client&id=${id}`
+function buildClientUrl(id) {
+  // URL RELATIVE comme demandé
+  return `/?mode=client&id=${id}`
 }
 
 // ── Routes
@@ -101,23 +92,22 @@ function buildClientUrl(id){
 // Santé
 app.get('/health', (_req, res) => res.json({ ok: true }))
 
-// Upload PDF → URL publique
+// Upload PDF → chemin relatif public
 app.post('/api/upload', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Aucun fichier' })
-    const base = getBaseUrl(req) 
-  const url  = `${base}/uploads/${req.file.filename}`
+  const url = `/uploads/${req.file.filename}`         // <- RELATIF
   console.log('ROUTE: /api/upload HIT ->', url)
   res.json({ url, fileName: req.file.originalname, size: req.file.size })
 })
 console.log('ROUTE: /api/upload READY')
 
-// Créer un BAT (retourne l’URL client)
+// Créer un BAT (retourne l’URL client relative)
 app.post('/api/proofs', (req, res) => {
   const { fileUrl, meta } = req.body || {}
   if (!fileUrl) return res.status(400).json({ error: 'fileUrl requis' })
   const id = nanoid(10)
   db.prepare(`INSERT INTO proofs(id,file_url,meta_json) VALUES (?,?,?)`)
-    .run(id, fileUrl, JSON.stringify(meta || {}))
+    .run(id, fileUrl, JSON.stringify(meta || {}))     // fileUrl attendu RELATIF
   res.json({ id, clientUrl: buildClientUrl(id) })
 })
 
@@ -162,7 +152,7 @@ app.post('/api/proofs/:id/approve', (req, res) => {
 
 // ── Démarrage
 app.listen(PORT, () => {
-  console.log(`API ready on ${SERVER_BASE_URL}`)
+  console.log(`API ready on port ${PORT}`)
   console.log(`CORS: accepts http://127.0.0.1:517x and http://localhost:517x`)
 })
 
