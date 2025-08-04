@@ -1,0 +1,45 @@
+services:
+  # ───────── API (Web Service) ─────────
+  - type: web
+    name: bat-api
+    rootDir: server
+    env: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: node index.js
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      # URL publique du client (tu la mettras après le 1er déploiement du client)
+      - key: PUBLIC_BASE_URL
+        value: https://REMPLACER-APRES-DEPLOIEMENT
+      # URL de l'API (facultatif, souvent inutile)
+      - key: SERVER_BASE_URL
+        fromService:
+          type: web
+          name: bat-api
+          property: url
+      # Dossier persistant pour les uploads
+      - key: UPLOAD_DIR
+        value: /opt/render/project/src/uploads
+    disks:
+      - name: uploads
+        mountPath: /opt/render/project/src/uploads
+        sizeGB: 1
+
+  # ───────── Client (Static Site Vite) ─────────
+  - type: static
+    name: bat-client
+    buildCommand: npm ci && npm run build
+    publishPath: dist
+    # Injecte automatiquement l'URL de l'API côté client
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: bat-api
+          property: url
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

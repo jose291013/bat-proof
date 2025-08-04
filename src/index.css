@@ -1,0 +1,317 @@
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  /* pas de display:flex ni place-items ici */
+  background: var(--bg);
+  color: var(--text);
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #f9f9f9;
+  }
+}
+/* Calque d'annotations posé par-dessus la page */
+.anno-layer { position:absolute; inset:0; pointer-events:auto; }
+.anno-pin {
+  position:absolute; transform:translate(-50%,-50%);
+  width:18px; height:18px; border-radius:50%; background:#ef4444; color:#fff;
+  font-size:12px; line-height:18px; text-align:center;
+  box-shadow:0 0 0 2px #fff, 0 1px 3px rgba(0,0,0,.2); cursor:pointer;
+}
+.anno-rect { position:absolute; border:2px solid #0ea5e9; background:rgba(14,165,233,.08); cursor:pointer; }
+.anno-rect .anno-label { position:absolute; top:-20px; left:0; background:#0ea5e9; color:#fff; font-size:11px; padding:1px 4px; border-radius:3px; }
+.anno-rect.ghost { border-style:dashed; background:rgba(14,165,233,.12); }
+.appbar { position: sticky; top: 0; z-index: 1000; background: #fff; }
+:root {
+  --bg: #f6f7f9; --card: #fff; --muted:#eef0f3;
+  --border:#e5e7eb; --text:#111827; --accent:#2563eb; --green:#16a34a;
+}
+body{ background:var(--bg); color:var(--text); }
+.appbar{ position:sticky; top:0; z-index:1000; background:#fff; border-bottom:1px solid var(--border); }
+
+.viewer-wrap{ display:flex; justify-content:center; padding:16px; }
+.viewer-card{ width:min(1100px, calc(100vw - 40px)); background:var(--card);
+  border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.06); padding:16px; }
+
+.toolbar button, .btn{ border:1px solid var(--border); background:#fff; border-radius:8px; padding:6px 10px; cursor:pointer; }
+.btn-ghost{ background:#fff; }
+.btn-active{ background:var(--muted); }
+.btn-success{ background:var(--green); color:#fff; border-color:var(--green); }
+.btn-disabled{ opacity:.6; cursor:not-allowed; }
+.badge{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; background:var(--muted); border:1px solid var(--border);}
+.badge-success{ background:#e9f8ee; border-color:#bfe8cd; color:#166534; }
+
+
+:root { --appbar-h: 56px; }
+
+/* Appbar */
+.appbar { position: sticky; top: 0; z-index: 1000; background:#fff; border-bottom:1px solid var(--border); }
+/* Appbar en 3 colonnes : [gauche] [centre] [droite] */
+/* Appbar en 4 colonnes : [SPACER 260] [gauche] [centre] [droite] */
+/* Appbar grid: [spacer 260] [left] [center]  + second row for admin tools */
+.appbar-inner{
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr auto 1fr;  /* spacer aligns with left info panel */
+  grid-template-rows: auto auto;              /* second row for admin controls */
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+}
+
+/* Row 1 */
+.appbar-spacer{ grid-column: 1; }
+.appbar-left  { grid-column: 2; display:flex; align-items:center; gap:12px; justify-self:start; }
+.appbar-center{ grid-column: 3; display:flex; align-items:center; gap:10px; justify-self:center; }
+
+/* Row 2 (admin only) — spans full width, right-aligned and wraps */
+.appbar-right{
+  grid-column: 1 / -1;
+  justify-self: end;
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+/* Mobile: single column, everything centered */
+@media (max-width: 900px){
+  .appbar-inner{
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    row-gap: 8px;
+    justify-items: center;
+  }
+  .appbar-spacer{ display:none; }
+  .appbar-left, .appbar-center{ justify-self:center; flex-wrap:wrap; }
+  .appbar-right{ grid-column:1; justify-self:center; }
+}
+
+
+
+
+
+/* ---- Plein écran centré ---- */
+.viewer-wrap{
+  min-height: calc(100vh - var(--appbar-h));
+  display:flex; justify-content:center;
+  padding:16px;
+}
+.viewer-card{
+  width: min(1200px, 100%);
+  max-height: calc(100vh - var(--appbar-h) - 32px);
+  overflow: auto;
+  background:#fff; border:1px solid #e5e7eb;
+  border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.06);
+  padding:16px;
+}
+
+/* Pages centrées */
+.page-wrap { margin:18px 0; display:flex; justify-content:center; }
+.page-box  { position:relative; display:inline-block; }
+
+/* Calque annotations (tu peux garder tes styles existants) */
+.anno-layer { position:absolute; inset:0; pointer-events:auto; user-select:none; cursor:default; }
+.anno-pin, .anno-rect { cursor:move; touch-action:none; }
+
+/* ---- Responsive mobile ---- */
+
+
+
+/* Annotations */
+.anno-pin, .anno-rect { cursor:move; touch-action:none; }
+.anno-pin { width:22px; height:22px; font-size:14px; line-height:22px;
+  border-radius:50%; background:#ef4444; color:#fff; text-align:center;
+  box-shadow:0 0 0 2px #fff, 0 1px 3px rgba(0,0,0,.2);
+}
+.anno-rect { border:2px solid #0ea5e9; background:rgba(14,165,233,.08); }
+.anno-rect .anno-label { position:absolute; top:-20px; left:0; background:#0ea5e9; color:#fff; font-size:11px; padding:1px 4px; border-radius:3px; }
+.anno-rect.ghost { border-style:dashed; background:rgba(14,165,233,.12); }
+/* Boutons de mode (Sélection / Épingle / Rectangle) */
+.btn-mode {
+  border:1px solid var(--border);
+  background:#fff;
+  color:var(--text);
+  border-radius:8px;
+  padding:6px 10px;
+  cursor:pointer;
+  transition:.12s background,color,border;
+}
+.btn-mode:is(:hover,:focus-visible){ background:#f3f4f6; }
+.btn-mode.is-active{
+  background: var(--green);
+  border-color: var(--green);
+  color:#fff;
+  box-shadow: 0 0 0 1px rgba(22,163,74,.2) inset;
+}
+/* ====== Mise en page 2 colonnes (infos + document) ====== */
+.viewer-grid{
+  display:grid;
+  grid-template-columns: 260px 1fr;
+  gap:16px;
+  align-items:start;
+}
+
+/* Panneau d'infos à gauche */
+.info-panel{
+  position:sticky; top:8px;
+  background:#fff; border:1px solid #e5e7eb; border-radius:10px;
+  box-shadow:0 4px 14px rgba(0,0,0,.05);
+  padding:12px;
+}
+.info-title{ font-weight:600; margin:4px 0 8px; font-size:14px; }
+.info-table{ width:100%; border-collapse:collapse; font-size:13px; }
+.info-table th{ text-align:left; color:#64748b; font-weight:500; padding:6px 8px; width:40%; }
+.info-table td{ padding:6px 8px; color:#111827; }
+.info-table tr + tr td, .info-table tr + tr th { border-top:1px dashed #e5e7eb; }
+
+/* Colonne document */
+.doc-col{ display:flex; flex-direction:column; align-items:center; }
+
+/* Barre affichage (centrée) */
+.toolbar-fit{
+  display:flex; justify-content:center; align-items:center; gap:10px;
+  margin:2px 0 8px;
+}
+.toolbar-fit .badge{ margin-left:6px; }
+
+/* Actions client, en haut et en bas (centrées) */
+.actions-bar{
+  display:flex; justify-content:center; gap:12px;
+  margin:10px 0;
+}
+.actions-bar .btn{ min-width:220px; }
+.actions-bar .btn-outline{
+  background:#fff; border:1px solid #e5e7eb; color:#111827;
+}
+
+/* Responsive : une seule colonne, infos au-dessus */
+@media (max-width: 900px){
+  .viewer-grid{ grid-template-columns: 1fr; }
+  .info-panel{ position:static; }
+}
+/* Segments client */
+.segbar{
+  display:flex; align-items:center; gap:14px;
+  flex-wrap:wrap; justify-content:center;
+}
+.seg{
+  display:flex; align-items:center; gap:8px;
+  padding:6px 10px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:#fff;
+}
+.seg-title{
+  font-size:12px; color:#64748b; margin-right:4px;
+}
+/* ===== Dropdown outils admin ===== */
+.menu{ position:relative; }
+.menu-btn{ border:1px solid var(--border); background:#fff; border-radius:8px; padding:6px 10px; cursor:pointer; }
+.menu-panel{
+  position:absolute; right:0; top:calc(100% + 6px);
+  min-width: 300px; background:#fff; border:1px solid #e5e7eb; border-radius:12px;
+  box-shadow:0 12px 28px rgba(0,0,0,.12); padding:8px; z-index:1200;
+}
+.menu-item{
+  display:block; width:100%; text-align:left; padding:8px 10px; border-radius:8px;
+  border:1px solid transparent; background:#fff; cursor:pointer;
+}
+.menu-item:hover{ background:#f3f4f6; }
+.menu-item.danger{ color:#b91c1c; }
+.menu-item.danger:hover{ background:#fee2e2; }
+.menu-row{ display:flex; gap:8px; align-items:center; padding:6px 0; }
+.menu-row input[type="text"]{ flex:1; border:1px solid #e5e7eb; border-radius:8px; padding:6px 8px; }
+.menu-sep{ height:1px; background:#e5e7eb; margin:8px 0; }
+.hidden{ display:none; }
+import multer from 'multer'
+import fs from 'fs'
+import path from 'path'
+
+// dossier uploads
+const UP = path.resolve('./uploads')
+if (!fs.existsSync(UP)) fs.mkdirSync(UP)
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UP),
+  filename: (_req, file, cb) => {
+    const safe = file.originalname.replace(/[^\w.-]/g, '_')
+    cb(null, Date.now() + '_' + safe)
+  }
+})
+const upload = multer({ storage })
+
+// URL publique pour servir les uploads
+const SERVER_BASE = process.env.SERVER_BASE_URL || `http://127.0.0.1:${PORT}`
+app.use('/uploads', express.static(UP))
+
+// POST /api/upload (multipart/form-data; field name = "file")
+app.post('/api/upload', upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Aucun fichier' })
+  const url = `${SERVER_BASE}/uploads/${req.file.filename}`
+  res.json({ url, fileName: req.file.originalname, size: req.file.size })
+})
+
+
+
+
+
+
+
+
