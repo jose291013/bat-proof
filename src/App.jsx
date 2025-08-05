@@ -162,7 +162,7 @@ export default function App() {
   setTimeout(() => { isProgScroll.current = false; }, 700);
 };
 
-  }
+  
 
   // pagination clavier
   useEffect(() => {
