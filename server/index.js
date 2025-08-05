@@ -8,6 +8,7 @@ import multer from 'multer'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+const CLIENT_BASE = process.env.CLIENT_BASE_URL || ''
 
 // ── BOOT logs
 console.log('BOOT file =', new URL(import.meta.url).pathname)
@@ -63,8 +64,17 @@ const storage = multer.diskStorage({
 })
 const upload = multer({ storage })
 
-// ── DB (SQLite)
-const db = new Database(path.resolve(__dirname, './db.sqlite'))
+// ── DB (SQLite) PERSISTANTE + MIGRATIONS AUTO
+// Chemin DB: var env DB_PATH > sinon ./db.sqlite (local)
+const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, './db.sqlite')
+
+// S'assure que le dossier existe (utile si DB_PATH pointe vers un Disk)
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
+
+// Ouvre la base
+const db = new Database(DB_PATH)
+
+// Schéma de base (tables)
 db.exec(`
 CREATE TABLE IF NOT EXISTS proofs (
   id TEXT PRIMARY KEY,
@@ -81,10 +91,31 @@ CREATE TABLE IF NOT EXISTS annotations (
 );
 `)
 
+// --- Migrations "add column" idempotentes ---
+function addColumnIfMissing(table, col, type) {
+  const cols = db.prepare(\`PRAGMA table_info(\${table})\`).all().map(c => c.name)
+  if (!cols.includes(col)) {
+    db.exec(\`ALTER TABLE \${table} ADD COLUMN \${col} \${type}\`)
+    console.log(\`DB: added \${table}.\${col} (\${type})\`)
+  }
+}
+
+// Colonnes pour ClickUp & envois
+addColumnIfMissing('proofs', 'client_email', 'TEXT')
+addColumnIfMissing('proofs', 'clickup_list_id', 'TEXT')
+addColumnIfMissing('proofs', 'clickup_task_id', 'TEXT')
+addColumnIfMissing('proofs', 'sent_at', 'TEXT')
+
+console.log('DB ready at', DB_PATH)
+
 // ── Helpers
-function buildClientUrl(id) {
-  // URL RELATIVE comme demandé
-  return `/?mode=client&id=${id}`
+function buildClientUrl(id, req) {
+  // si CLIENT_BASE n'est pas défini en env, on retombe sur l'origine de la requête
+  const base = (CLIENT_BASE && CLIENT_BASE.trim())
+    ? CLIENT_BASE
+    : `${req.protocol}://${req.get('host')}`
+
+  return `${base.replace(/\/+$/, '')}/?mode=client&id=${id}`
 }
 
 // ── Routes
@@ -108,7 +139,7 @@ app.post('/api/proofs', (req, res) => {
   const id = nanoid(10)
   db.prepare(`INSERT INTO proofs(id,file_url,meta_json) VALUES (?,?,?)`)
     .run(id, fileUrl, JSON.stringify(meta || {}))     // fileUrl attendu RELATIF
-  res.json({ id, clientUrl: buildClientUrl(id) })
+  res.json({ id, clientUrl: buildClientUrl(id, req) }) // ← passe req ici
 })
 
 // Récupérer état + métadonnées
@@ -155,4 +186,106 @@ app.listen(PORT, () => {
   console.log(`API ready on port ${PORT}`)
   console.log(`CORS: accepts http://127.0.0.1:517x and http://localhost:517x`)
 })
+// ===== Helpers ClickUp (si pas déjà ajoutés plus haut)
+const CU_BASE = 'https://api.clickup.com/api/v2';
+const cuHeaders = {
+  Authorization: process.env.CLICKUP_TOKEN,
+  'Content-Type': 'application/json',
+};
+async function cuGET(p){ const r=await fetch(`${CU_BASE}${p}`,{headers:cuHeaders}); return r.json(); }
+async function cuPOST(p,b){ const r=await fetch(`${CU_BASE}${p}`,{method:'POST',headers:cuHeaders,body:JSON.stringify(b)}); return r.json(); }
+async function cuPUT(p,b){ const r=await fetch(`${CU_BASE}${p}`,{method:'PUT', headers:cuHeaders,body:JSON.stringify(b)}); return r.json(); }
+
+function buildCuDescription({ clientUrl, fileUrl, meta }) {
+  return [
+    'BAT à valider',
+    `- Version : ${meta?.version ?? '-'}`,
+    `- Fichier : ${meta?.fileName ?? '-'}${meta?.fileSize ? ` (${meta.fileSize} o)` : ''}`,
+    `- Pages   : ${meta?.pages ?? '-'}`,
+    `- Lien client : ${clientUrl}`,
+    `- Lien fichier : ${fileUrl}`,
+    meta?.comment ? `- Commentaire : ${meta.comment}` : null,
+  ].filter(Boolean).join('\n');
+}
+async function getOrCreateListByEmail(email) {
+  const spaceId = process.env.CLICKUP_SPACE_ID; // ID de l'ESPACE "BAT"
+  const lists = await cuGET(`/space/${spaceId}/list?archived=false`);
+  const f = lists?.lists?.find(l => (l.name||'').toLowerCase() === email.toLowerCase());
+  if (f) return f.id;
+  const created = await cuPOST(`/space/${spaceId}/list`, { name: email });
+  return created.id;
+}
+
+// ===== Route: envoyer le BAT (crée/maj la tâche + ping Albato)
+app.post('/api/proofs/:id/send', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { email } = req.body || {};
+    if (!email) return res.status(400).json({ error: 'email requis' });
+
+    const row = db.prepare('SELECT * FROM proofs WHERE id=?').get(id);
+    if (!row) return res.status(404).json({ error: 'not found' });
+
+    const meta = JSON.parse(row.meta_json || '{}');
+    const clientUrl = buildClientUrl(id, req);
+    const fileUrl = row.file_url;
+
+    const listId = row.clickup_list_id || await getOrCreateListByEmail(email);
+    const taskName = `${meta.fileName || 'document'} ${meta.version ? `(V${meta.version})` : ''}`.trim();
+    const description = buildCuDescription({ clientUrl, fileUrl, meta });
+    const statusSent = process.env.CLICKUP_STATUS_SENT || 'BAT ENVOYÉ';
+
+    let taskId = row.clickup_task_id;
+    if (!taskId) {
+      const created = await cuPOST(`/list/${listId}/task`, {
+        name: taskName,
+        description,
+        status: statusSent,
+        priority: 3,
+      });
+      if (!created?.id) return res.status(502).json({ error:'clickup_create_failed', details: created });
+      taskId = created.id;
+    } else {
+      const updated = await cuPUT(`/task/${taskId}`, { name: taskName, description, status: statusSent });
+      if (updated?.err) return res.status(502).json({ error:'clickup_update_failed', details: updated });
+    }
+
+    // Sauvegarde DB
+    db.prepare('UPDATE proofs SET client_email=?, clickup_list_id=?, clickup_task_id=?, meta_json=?, sent_at=? WHERE id=?')
+      .run(
+        email,
+        listId,
+        taskId,
+        JSON.stringify({ ...meta, sentAt: meta.sentAt || new Date().toISOString() }),
+        new Date().toISOString(),
+        id
+      );
+
+    // Commentaire + ping Albato (déclencheur email)
+    try {
+      await fetch(`${CU_BASE}/task/${taskId}/comment`, {
+        method: 'POST',
+        headers: cuHeaders,
+        body: JSON.stringify({ comment_text: `📎 Lien client\n${clientUrl}\n\n📎 Fichier\n${fileUrl}` }),
+      });
+      if (process.env.ALBATO_WEBHOOK_URL) {
+        await fetch(process.env.ALBATO_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify({
+            event: 'BAT_SENT',
+            to: email, taskId, listId, proofId: id,
+            clientUrl, fileUrl, meta,
+          }),
+        });
+      }
+    } catch {}
+
+    res.json({ ok: true, taskId, listId, clientUrl });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'server', details: e.message });
+  }
+});
+
 

@@ -322,6 +322,23 @@ export default function App() {
                     }}>
                       Créer le lien client
                     </button>
+                    <button className="menu-item" onClick={async ()=>{
+  if (!proofId) { alert('Pas d’ID BAT'); return; }
+  const email = prompt('Email du client ?');
+  if (!email) return;
+  const r = await fetch(`${API}/api/proofs/${proofId}/send`, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ email })
+  });
+  if (!r.ok) { alert('Erreur envoi / ClickUp'); return; }
+  const data = await r.json();
+  await navigator.clipboard?.writeText(data.clientUrl).catch(()=>{});
+  alert(`Lien client copié : ${data.clientUrl}\nTâche ClickUp: ${data.taskId}`);
+}}>
+  Envoyer par email
+</button>
+
 
                     <label className="menu-item">
   Importer PDF
