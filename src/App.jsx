@@ -125,12 +125,22 @@ export default function App() {
   }
 
   // scroll vers une page
+  function getHeaderOffset() {
+   const h = document.querySelector('.appbar')
+   return (h?.getBoundingClientRect().height || 0) + 12 // +12px margin
+ }
   const gotoPage = (n) => {
     if (!numPages) return
     const p = Math.max(1, Math.min(numPages, n))
     setCurrentPage(p) // optimiste : l'observer confirmera
     const el = pageRefs.current[p - 1]
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+   if (el) {
+     // optimistic state so the UI updates instantly
+     setCurrentPage(p)
+     const offset = getHeaderOffset()
+     const top = window.scrollY + el.getBoundingClientRect().top - offset
+     window.scrollTo({ top, behavior: 'smooth' })
+   }
   }
 
   // pagination clavier
