@@ -29,16 +29,21 @@ export default function App() {
   const [sendOpen, setSendOpen] = useState(false)
 
   // Mode & version depuis l’URL
- const [search, setSearch] = useState(() => new URLSearchParams(window.location.search));
-useEffect(() => {
-  const onPop = () => setSearch(new URLSearchParams(window.location.search));
-  window.addEventListener('popstate', onPop);
-  return () => window.removeEventListener('popstate', onPop);
-}, []);
-const mode = search.get('mode') || 'admin';
-const isClient = mode === 'client';
-const versionFromUrl = Number(search.get('v') || search.get('ver') || 1);
-const proofId = search.get('id') || null;
+ const [search, setSearch] = useState(() => new URLSearchParams(window.location.search))
+ const [proofId, setProofId] = useState(search.get('id') || null)
+ const mode = search.get('mode') || 'admin'
+ const isClient = mode === 'client'
+ const versionFromUrl = Number(search.get('v') || search.get('ver') || 1)
+
+ useEffect(() => {
+   const onPop = () => {
+     const s = new URLSearchParams(window.location.search)
+    setSearch(s)
+     setProofId(s.get('id') || null)
+   }
+   window.addEventListener('popstate', onPop)
+   return () => window.removeEventListener('popstate', onPop)
+ }, [])
 
   // Fit-to-width, container, page visible, molette
   const [fit, setFit] = useState(true)
@@ -327,6 +332,8 @@ const proofId = search.get('id') || null;
   u.searchParams.set('id', data.id);
   u.searchParams.set('mode', 'admin');
   window.history.replaceState(null, '', u.toString());
+  setSearch(new URLSearchParams(u.search)) // <-- maj l’état
+  setProofId(data.id)
   alert(`Lien client copié : ${data.clientUrl}`);
   setToolsOpen(false);
 }}>
