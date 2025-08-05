@@ -72,6 +72,7 @@ export default function App() {
   for (let i = 1; i <= numPages; i++) ratios[i] = 0
 
   const io = new IntersectionObserver((entries) => {
+    if (isProgScroll.current) return  // ← ignore pendant le scroll forcé
    // MAJ du cache pour chaque page concernée par ce batch
     for (const e of entries) {
      const pn = +e.target.dataset.pn
@@ -125,6 +126,7 @@ export default function App() {
   }
 
   // scroll vers une page
+  const isProgScroll = useRef(false)
   function getHeaderOffset() {
    const h = document.querySelector('.appbar')
    return (h?.getBoundingClientRect().height || 0) + 12 // +12px margin
