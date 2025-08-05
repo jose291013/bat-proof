@@ -162,18 +162,9 @@ body{ background:var(--bg); color:var(--text); }
   padding:16px;
 }
 
-/* Pages centrées + offset pour le scroll */
-.page-wrap {
-  margin: 18px 0;
-  display: flex;
-  justify-content: center;
-  scroll-margin-top: 80px; /* ajuste 64–96px si besoin */
-}
-
-.page-box {
-  position: relative;
-  display: inline-block;
-}
+/* Pages centrées */
+.page-wrap { margin:18px 0; display:flex; justify-content:center; }
+.page-box  { position:relative; display:inline-block; }
 
 /* Calque annotations (tu peux garder tes styles existants) */
 .anno-layer { position:absolute; inset:0; pointer-events:auto; user-select:none; cursor:default; }
@@ -270,7 +261,6 @@ body{ background:var(--bg); color:var(--text); }
 .seg-title{
   font-size:12px; color:#64748b; margin-right:4px;
 }
-.page-wrap { margin: 16px 0; }
 /* ===== Dropdown outils admin ===== */
 .menu{ position:relative; }
 .menu-btn{ border:1px solid var(--border); background:#fff; border-radius:8px; padding:6px 10px; cursor:pointer; }
