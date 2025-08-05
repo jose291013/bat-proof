@@ -66,10 +66,17 @@ export default function App() {
   // observer de page visible (pour pagination)
   useEffect(() => {
     if (!numPages || sendOpen) return
-    const io = new IntersectionObserver(
-      (entries) => entries.forEach(ent => { if (ent.isIntersecting) setCurrentPage(Number(ent.target.dataset.pn)) }),
-      { root: null, threshold: 0.6 }
-    )
+    const io = new IntersectionObserver((entries) => {
+  // on garde uniquement celles visibles et on prend la plus visible
+   const best = entries
+     .filter(e => e.isIntersecting)
+     .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
+   if (best) setCurrentPage(+best.target.dataset.pn)
+ }, {
+   root: null,
+   // seuils plus fins pour mieux capter le changement
+   threshold: [0.25, 0.5, 0.75]
+ })
     pageRefs.current.forEach(el => el && io.observe(el))
     return () => io.disconnect()
   }, [numPages, fileKey, sendOpen])
