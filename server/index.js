@@ -93,12 +93,13 @@ CREATE TABLE IF NOT EXISTS annotations (
 
 // --- Migrations "add column" idempotentes ---
 function addColumnIfMissing(table, col, type) {
-  const cols = db.prepare(\`PRAGMA table_info(\${table})\`).all().map(c => c.name)
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name)
   if (!cols.includes(col)) {
-    db.exec(\`ALTER TABLE \${table} ADD COLUMN \${col} \${type}\`)
-    console.log(\`DB: added \${table}.\${col} (\${type})\`)
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`)
+    console.log(`DB: added ${table}.${col} (${type})`)
   }
 }
+
 
 // Colonnes pour ClickUp & envois
 addColumnIfMissing('proofs', 'client_email', 'TEXT')
