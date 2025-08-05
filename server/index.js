@@ -8,6 +8,7 @@ import multer from 'multer'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+const CLIENT_BASE = process.env.CLIENT_BASE_URL || ''
 
 // ── BOOT logs
 console.log('BOOT file =', new URL(import.meta.url).pathname)
@@ -63,8 +64,17 @@ const storage = multer.diskStorage({
 })
 const upload = multer({ storage })
 
-// ── DB (SQLite)
-const db = new Database(path.resolve(__dirname, './db.sqlite'))
+// ── DB (SQLite) PERSISTANTE + MIGRATIONS AUTO
+// Chemin DB: var env DB_PATH > sinon ./db.sqlite (local)
+const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, './db.sqlite')
+
+// S'assure que le dossier existe (utile si DB_PATH pointe vers un Disk)
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
+
+// Ouvre la base
+const db = new Database(DB_PATH)
+
+// Schéma de base (tables)
 db.exec(`
 CREATE TABLE IF NOT EXISTS proofs (
   id TEXT PRIMARY KEY,
@@ -81,10 +91,31 @@ CREATE TABLE IF NOT EXISTS annotations (
 );
 `)
 
+// --- Migrations "add column" idempotentes ---
+function addColumnIfMissing(table, col, type) {
+  const cols = db.prepare(\`PRAGMA table_info(\${table})\`).all().map(c => c.name)
+  if (!cols.includes(col)) {
+    db.exec(\`ALTER TABLE \${table} ADD COLUMN \${col} \${type}\`)
+    console.log(\`DB: added \${table}.\${col} (\${type})\`)
+  }
+}
+
+// Colonnes pour ClickUp & envois
+addColumnIfMissing('proofs', 'client_email', 'TEXT')
+addColumnIfMissing('proofs', 'clickup_list_id', 'TEXT')
+addColumnIfMissing('proofs', 'clickup_task_id', 'TEXT')
+addColumnIfMissing('proofs', 'sent_at', 'TEXT')
+
+console.log('DB ready at', DB_PATH)
+
 // ── Helpers
-function buildClientUrl(id) {
-  // URL RELATIVE comme demandé
-  return `/?mode=client&id=${id}`
+function buildClientUrl(id, req) {
+  // si CLIENT_BASE n'est pas défini en env, on retombe sur l'origine de la requête
+  const base = (CLIENT_BASE && CLIENT_BASE.trim())
+    ? CLIENT_BASE
+    : `${req.protocol}://${req.get('host')}`
+
+  return `${base.replace(/\/+$/, '')}/?mode=client&id=${id}`
 }
 
 // ── Routes
@@ -108,7 +139,7 @@ app.post('/api/proofs', (req, res) => {
   const id = nanoid(10)
   db.prepare(`INSERT INTO proofs(id,file_url,meta_json) VALUES (?,?,?)`)
     .run(id, fileUrl, JSON.stringify(meta || {}))     // fileUrl attendu RELATIF
-  res.json({ id, clientUrl: buildClientUrl(id) })
+  res.json({ id, clientUrl: buildClientUrl(id, req) }) // ← passe req ici
 })
 
 // Récupérer état + métadonnées
