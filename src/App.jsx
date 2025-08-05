@@ -138,6 +138,7 @@ export default function App() {
   const scrollsInside =
     sc && sc.scrollHeight > sc.clientHeight + 8 &&
     getComputedStyle(sc).overflowY !== 'visible'
+    console.log('scrollInside?', scrollsInside)
 
   if (scrollsInside) {
     // Scroll interne à .doc-col
