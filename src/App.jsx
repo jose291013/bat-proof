@@ -65,36 +65,37 @@ export default function App() {
 
   // observer de page visible (pour pagination)
   useEffect(() => {
-    if (!numPages || sendOpen) return
-    // cache des ratios visibles par page
-  const ratios = {}
-  // initialiser à 0
-  for (let i = 1; i <= numPages; i++) ratios[i] = 0
+  if (!numPages || sendOpen) return;
+
+  // cache des ratios persistant
+  const ratiosRef = {};
+  for (let i = 1; i <= numPages; i++) ratiosRef[i] = 0;
 
   const io = new IntersectionObserver((entries) => {
-    if (isProgScroll.current) return  // ← ignore pendant le scroll forcé
-   // MAJ du cache pour chaque page concernée par ce batch
+    if (isProgScroll.current) return; // on ignore pendant le scroll déclenché par les flèches
+
     for (const e of entries) {
-     const pn = +e.target.dataset.pn
-      ratios[pn] = e.isIntersecting ? e.intersectionRatio : 0
-   }
-    // choisir la page la plus visible (max ratio)
-   let bestPn = 1, bestRatio = -1
-    for (let i = 1; i <= numPages; i++) {
-      const r = ratios[i] ?? 0
-      if (r > bestRatio) { bestRatio = r; bestPn = i }
+      const pn = +e.target.dataset.pn;
+      ratiosRef[pn] = e.isIntersecting ? e.intersectionRatio : 0;
     }
-    if (bestPn !== (currentPage || 1)) setCurrentPage(bestPn)
+
+    // page la plus visible
+    let bestPn = 1, bestR = -1;
+    for (let i = 1; i <= numPages; i++) {
+      const r = ratiosRef[i] ?? 0;
+      if (r > bestR) { bestR = r; bestPn = i; }
+    }
+    if (bestPn !== (currentPage || 1)) setCurrentPage(bestPn);
   }, {
     root: null,
     threshold: [0, 0.15, 0.3, 0.5, 0.7, 0.85, 1],
-    // décale le viewport logique pour ignorer la barre du haut
-    rootMargin: "-64px 0px -64px 0px",
-  })
-    pageRefs.current.forEach(el => el && io.observe(el))
-    return () => io.disconnect()
-  // ⚠️ on lit currentPage dans le callback → ajoute-le en dep (ok ici)
-}, [numPages, fileKey, sendOpen, currentPage])
+    rootMargin: "-64px 0px -64px 0px", // ajuste selon la hauteur de l'appbar
+  });
+
+  pageRefs.current.forEach(el => el && io.observe(el));
+  return () => io.disconnect();
+}, [numPages, fileKey, sendOpen, currentPage]);
+
 
   function onWheelZoom(e) {
     if (!e.ctrlKey || fit) return
@@ -157,8 +158,9 @@ export default function App() {
   if (!el) return
   setCurrentPage(p)                 // MAJ optimiste
   isProgScroll.current = true       // geler l’IO pendant le scroll
-  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  setTimeout(() => { isProgScroll.current = false }, 600)
+  el.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+  setTimeout(() => { isProgScroll.current = false; }, 700);
+};
 
   }
 
