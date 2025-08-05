@@ -159,7 +159,7 @@ export default function App() {
   isProgScroll.current = true       // geler l’IO pendant le scroll
   el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   setTimeout(() => { isProgScroll.current = false }, 600)
-}
+
   }
 
   // pagination clavier
