@@ -65,14 +65,37 @@ export default function App() {
 
   // observer de page visible (pour pagination)
   useEffect(() => {
-    if (!numPages || sendOpen) return
-    const io = new IntersectionObserver(
-      (entries) => entries.forEach(ent => { if (ent.isIntersecting) setCurrentPage(Number(ent.target.dataset.pn)) }),
-      { root: cardRef.current, threshold: 0.6 }
-    )
-    pageRefs.current.forEach(el => el && io.observe(el))
-    return () => io.disconnect()
-  }, [numPages, fileKey, sendOpen])
+  if (!numPages || sendOpen) return;
+
+  // cache des ratios persistant
+  const ratiosRef = {};
+  for (let i = 1; i <= numPages; i++) ratiosRef[i] = 0;
+
+  const io = new IntersectionObserver((entries) => {
+    if (isProgScroll.current) return; // on ignore pendant le scroll déclenché par les flèches
+
+    for (const e of entries) {
+      const pn = +e.target.dataset.pn;
+      ratiosRef[pn] = e.isIntersecting ? e.intersectionRatio : 0;
+    }
+
+    // page la plus visible
+    let bestPn = 1, bestR = -1;
+    for (let i = 1; i <= numPages; i++) {
+      const r = ratiosRef[i] ?? 0;
+      if (r > bestR) { bestR = r; bestPn = i; }
+    }
+    if (bestPn !== (currentPage || 1)) setCurrentPage(bestPn);
+  }, {
+    root: cardRef.current,
+    threshold: [0, 0.15, 0.3, 0.5, 0.7, 0.85, 1],
+    rootMargin: "-64px 0px -64px 0px", // ajuste selon la hauteur de l'appbar
+  });
+
+  pageRefs.current.forEach(el => el && io.observe(el));
+  return () => io.disconnect();
+}, [numPages, fileKey, sendOpen, currentPage]);
+
 
   function onWheelZoom(e) {
     if (!e.ctrlKey || fit) return
@@ -104,12 +127,49 @@ export default function App() {
   }
 
   // scroll vers une page
-  const gotoPage = (n) => {
-    if (!numPages) return
-    const p = Math.max(1, Math.min(numPages, n))
-    const el = pageRefs.current[p - 1]
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  
+  function getHeaderOffset() {
+   const h = document.querySelector('.appbar')
+   return (h?.getBoundingClientRect().height || 0) + 12 // +12px margin
+ }
+ function scrollToPageEl(el) {
+  const sc = cardRef.current
+  const offset = getHeaderOffset()
+  // Est-ce que la colonne est réellement scrollable ?
+  const scrollsInside =
+    sc && sc.scrollHeight > sc.clientHeight + 8 &&
+    getComputedStyle(sc).overflowY !== 'visible'
+    console.log('scrollInside?', scrollsInside)
+
+  if (scrollsInside) {
+    // Scroll interne à .doc-col
+    const top = el.offsetTop - sc.offsetTop - 12
+    sc.scrollTo({ top, behavior: 'smooth' })
+  } else {
+    // Scroll de la fenêtre
+    const top = window.scrollY + el.getBoundingClientRect().top - offset
+    window.scrollTo({ top, behavior: 'smooth' })
   }
+ }
+ const isProgScroll = useRef(false)
+  const gotoPage = (n) => {
+  if (!numPages) return;
+  const p = Math.max(1, Math.min(numPages, n));
+  const el = pageRefs.current[p - 1];
+  const sc = cardRef.current;            // ← le scroller réel (.viewer-card)
+  if (!el || !sc) return;
+
+  setCurrentPage(p);                     // MAJ optimiste
+  isProgScroll.current = true;
+
+  // Scroll doux à l’intérieur du conteneur
+  const top = el.offsetTop - sc.offsetTop - 12; // petit padding
+  sc.scrollTo({ top, behavior: 'smooth' });
+
+  setTimeout(() => { isProgScroll.current = false; }, 600);
+};
+
+  
 
   // pagination clavier
   useEffect(() => {
@@ -345,6 +405,7 @@ export default function App() {
 
       {/* MAIN */}
       <main className="viewer-wrap">
+        <div className="viewer-card" ref={cardRef}></div>
         <div className="viewer-grid">
           {/* ===== Colonne gauche : Infos ===== */}
           <aside className="info-panel">
