@@ -29,16 +29,16 @@ export default function App() {
   const [sendOpen, setSendOpen] = useState(false)
 
   // Mode & version depuis l’URL
- const [search, setSearch] = useState(() => new URLSearchParams(window.location.search))
- useEffect(() => {
-   const onPop = () => setSearch(new URLSearchParams(window.location.search))
-   window.addEventListener('popstate', onPop)
-   return () => window.removeEventListener('popstate', onPop)
- }, [])
- const mode = search.get('mode') || 'admin'
- const isClient = mode === 'client'
- const versionFromUrl = Number(search.get('v') || search.get('ver') || 1)
- const proofId = search.get('id') || null
+ const [search, setSearch] = useState(() => new URLSearchParams(window.location.search));
+useEffect(() => {
+  const onPop = () => setSearch(new URLSearchParams(window.location.search));
+  window.addEventListener('popstate', onPop);
+  return () => window.removeEventListener('popstate', onPop);
+}, []);
+const mode = search.get('mode') || 'admin';
+const isClient = mode === 'client';
+const versionFromUrl = Number(search.get('v') || search.get('ver') || 1);
+const proofId = search.get('id') || null;
 
   // Fit-to-width, container, page visible, molette
   const [fit, setFit] = useState(true)
@@ -309,43 +309,50 @@ export default function App() {
                     </button>
 
                     <button className="menu-item" onClick={async ()=>{
-                      let fileUrl = typeof file === 'string' ? file : null
-                      if (!fileUrl) {
-                        alert("Le PDF actuel n'a pas d'URL publique. Place-le dans /public ou active l’upload serveur.")
-                        return
-                      }
-                      const res = await fetch(`${API}/api/proofs`, {
-                        method:'POST',
-                        headers:{'Content-Type':'application/json'},
-                        body: JSON.stringify({ fileUrl, meta })
-                      })
-                      if (!res.ok) { alert('Erreur création lien'); return }
-                      // Mets à jour l'URL actuelle en admin pour conserver l'id
- const u = new URL(window.location.href)
- u.searchParams.set('id', data.id)
- u.searchParams.set('mode', 'admin')
- window.history.replaceState(null, '', u.toString())
-                      alert(`Lien client copié : ${data.clientUrl}`)
-                      setToolsOpen(false)
-                    }}>
-                      Créer le lien client
-                    </button>
-                    <button className="menu-item" onClick={async ()=>{
-  if (!proofId) { alert('Pas d’ID BAT'); return; }
-  const email = prompt('Email du client ?');
+  let fileUrl = typeof file === 'string' ? file : null;
+  if (!fileUrl) {
+    alert("Le PDF actuel n'a pas d'URL publique.");
+    return;
+  }
+  const res = await fetch(`${API}/api/proofs`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ fileUrl, meta })
+  });
+  if (!res.ok) { alert('Erreur création lien'); return; }
+  const data = await res.json();                 // <-- data défini ici
+  await navigator.clipboard?.writeText(data.clientUrl).catch(()=>{});
+  // pousse l'id dans l’URL (mode admin)
+  const u = new URL(window.location.href);
+  u.searchParams.set('id', data.id);
+  u.searchParams.set('mode', 'admin');
+  window.history.replaceState(null, '', u.toString());
+  alert(`Lien client copié : ${data.clientUrl}`);
+  setToolsOpen(false);
+}}>
+  Créer le lien client
+</button>
+
+ <button className="menu-item" onClick={async ()=>{
+  const id = proofId; // ← Option B : on lit l'ID depuis l’URL
+  if (!id) { alert('Pas d’ID BAT'); return; }
+  const email = prompt('Email du client ?') || '';
   if (!email) return;
-  const r = await fetch(`${API}/api/proofs/${proofId}/send`, {
+
+  const r = await fetch(`${API}/api/proofs/${id}/send`, {
     method:'POST',
     headers:{ 'Content-Type':'application/json' },
     body: JSON.stringify({ email })
   });
   if (!r.ok) { alert('Erreur envoi / ClickUp'); return; }
-  const data = await r.json();
-  await navigator.clipboard?.writeText(data.clientUrl).catch(()=>{});
-  alert(`Lien client copié : ${data.clientUrl}\nTâche ClickUp: ${data.taskId}`);
+  const { clientUrl, taskId } = await r.json();
+  await navigator.clipboard?.writeText(clientUrl).catch(()=>{});
+  alert(`Lien client copié : ${clientUrl}\nTâche ClickUp : ${taskId}`);
+  setToolsOpen(false);
 }}>
   Envoyer par email
 </button>
+
 
 
                     <label className="menu-item">
