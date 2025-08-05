@@ -68,7 +68,7 @@ export default function App() {
     if (!numPages || sendOpen) return
     const io = new IntersectionObserver(
       (entries) => entries.forEach(ent => { if (ent.isIntersecting) setCurrentPage(Number(ent.target.dataset.pn)) }),
-      { root: cardRef.current, threshold: 0.6 }
+      { root: null, threshold: 0.6 }
     )
     pageRefs.current.forEach(el => el && io.observe(el))
     return () => io.disconnect()
