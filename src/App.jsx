@@ -87,7 +87,7 @@ export default function App() {
     }
     if (bestPn !== (currentPage || 1)) setCurrentPage(bestPn);
   }, {
-    root: null,
+    root: cardRef.current,
     threshold: [0, 0.15, 0.3, 0.5, 0.7, 0.85, 1],
     rootMargin: "-64px 0px -64px 0px", // ajuste selon la hauteur de l'appbar
   });
@@ -127,7 +127,7 @@ export default function App() {
   }
 
   // scroll vers une page
-  const isProgScroll = useRef(false)
+  
   function getHeaderOffset() {
    const h = document.querySelector('.appbar')
    return (h?.getBoundingClientRect().height || 0) + 12 // +12px margin
@@ -151,15 +151,22 @@ export default function App() {
     window.scrollTo({ top, behavior: 'smooth' })
   }
  }
+ const isProgScroll = useRef(false)
   const gotoPage = (n) => {
-  if (!numPages) return
-  const p = Math.max(1, Math.min(numPages, n))
-  const el = pageRefs.current[p - 1]
-  if (!el) return
-  setCurrentPage(p)                 // MAJ optimiste
-  isProgScroll.current = true       // geler l’IO pendant le scroll
-  el.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
-  setTimeout(() => { isProgScroll.current = false; }, 700);
+  if (!numPages) return;
+  const p = Math.max(1, Math.min(numPages, n));
+  const el = pageRefs.current[p - 1];
+  const sc = cardRef.current;            // ← le scroller réel (.viewer-card)
+  if (!el || !sc) return;
+
+  setCurrentPage(p);                     // MAJ optimiste
+  isProgScroll.current = true;
+
+  // Scroll doux à l’intérieur du conteneur
+  const top = el.offsetTop - sc.offsetTop - 12; // petit padding
+  sc.scrollTo({ top, behavior: 'smooth' });
+
+  setTimeout(() => { isProgScroll.current = false; }, 600);
 };
 
   
@@ -398,6 +405,7 @@ export default function App() {
 
       {/* MAIN */}
       <main className="viewer-wrap">
+        <div className="viewer-card" ref={cardRef}></div>
         <div className="viewer-grid">
           {/* ===== Colonne gauche : Infos ===== */}
           <aside className="info-panel">
