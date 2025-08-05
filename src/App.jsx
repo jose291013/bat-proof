@@ -151,17 +151,15 @@ export default function App() {
   }
  }
   const gotoPage = (n) => {
-    if (!numPages) return
-    const p = Math.max(1, Math.min(numPages, n))
-    setCurrentPage(p) // optimiste : l'observer confirmera
-    const el = pageRefs.current[p - 1]
-   if (el) {
-     // optimistic state so the UI updates instantly
-     setCurrentPage(p)
-     isProgScroll.current = true      // gèle l'IO pendant le scroll
-  scrollToPageEl(el)
+  if (!numPages) return
+  const p = Math.max(1, Math.min(numPages, n))
+  const el = pageRefs.current[p - 1]
+  if (!el) return
+  setCurrentPage(p)                 // MAJ optimiste
+  isProgScroll.current = true       // geler l’IO pendant le scroll
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   setTimeout(() => { isProgScroll.current = false }, 600)
-   }
+}
   }
 
   // pagination clavier
