@@ -131,6 +131,24 @@ export default function App() {
    const h = document.querySelector('.appbar')
    return (h?.getBoundingClientRect().height || 0) + 12 // +12px margin
  }
+ function scrollToPageEl(el) {
+  const sc = cardRef.current
+  const offset = getHeaderOffset()
+  // Est-ce que la colonne est réellement scrollable ?
+  const scrollsInside =
+    sc && sc.scrollHeight > sc.clientHeight + 8 &&
+    getComputedStyle(sc).overflowY !== 'visible'
+
+  if (scrollsInside) {
+    // Scroll interne à .doc-col
+    const top = el.offsetTop - sc.offsetTop - 12
+    sc.scrollTo({ top, behavior: 'smooth' })
+  } else {
+    // Scroll de la fenêtre
+    const top = window.scrollY + el.getBoundingClientRect().top - offset
+    window.scrollTo({ top, behavior: 'smooth' })
+  }
+ }
   const gotoPage = (n) => {
     if (!numPages) return
     const p = Math.max(1, Math.min(numPages, n))
@@ -139,9 +157,9 @@ export default function App() {
    if (el) {
      // optimistic state so the UI updates instantly
      setCurrentPage(p)
-     const offset = getHeaderOffset()
-     const top = window.scrollY + el.getBoundingClientRect().top - offset
-     window.scrollTo({ top, behavior: 'smooth' })
+     isProgScroll.current = true      // gèle l'IO pendant le scroll
+  scrollToPageEl(el)
+  setTimeout(() => { isProgScroll.current = false }, 600)
    }
   }
 
