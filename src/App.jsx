@@ -29,11 +29,16 @@ export default function App() {
   const [sendOpen, setSendOpen] = useState(false)
 
   // Mode & version depuis l’URL
-  const params = useMemo(() => new URLSearchParams(window.location.search), [])
-  const mode = params.get('mode') || 'admin'
-  const isClient = mode === 'client'
-  const versionFromUrl = Number(params.get('v') || params.get('ver') || 1)
-  const proofId = params.get('id') || null
+ const [search, setSearch] = useState(() => new URLSearchParams(window.location.search))
+ useEffect(() => {
+   const onPop = () => setSearch(new URLSearchParams(window.location.search))
+   window.addEventListener('popstate', onPop)
+   return () => window.removeEventListener('popstate', onPop)
+ }, [])
+ const mode = search.get('mode') || 'admin'
+ const isClient = mode === 'client'
+ const versionFromUrl = Number(search.get('v') || search.get('ver') || 1)
+ const proofId = search.get('id') || null
 
   // Fit-to-width, container, page visible, molette
   const [fit, setFit] = useState(true)
@@ -315,8 +320,11 @@ export default function App() {
                         body: JSON.stringify({ fileUrl, meta })
                       })
                       if (!res.ok) { alert('Erreur création lien'); return }
-                      const data = await res.json()
-                      await navigator.clipboard?.writeText(data.clientUrl).catch(()=>{})
+                      // Mets à jour l'URL actuelle en admin pour conserver l'id
+ const u = new URL(window.location.href)
+ u.searchParams.set('id', data.id)
+ u.searchParams.set('mode', 'admin')
+ window.history.replaceState(null, '', u.toString())
                       alert(`Lien client copié : ${data.clientUrl}`)
                       setToolsOpen(false)
                     }}>
