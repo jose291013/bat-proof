@@ -116,6 +116,21 @@ CREATE TABLE IF NOT EXISTS version_annotations (
   PRIMARY KEY (version_id, page)
 );
 `)
+// --- Historique des envois (audit) ---
+db.exec(`
+CREATE TABLE IF NOT EXISTS proof_sends (
+  id TEXT PRIMARY KEY,
+  proof_id TEXT NOT NULL,
+  version_id TEXT,
+  to_email TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  response_status INTEGER,
+  response_text TEXT,
+  created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_proof_sends_proof ON proof_sends(proof_id);
+`)
+
 
 
 // --- Migrations "add column" idempotentes ---
@@ -297,6 +312,7 @@ app.post('/api/proofs/:id/send', async (req, res) => {
     const clientUrl = buildClientUrl(id, req);
     const fileUrl = row.file_url;
     const adminUrl = `${(process.env.CLIENT_BASE_URL || '').replace(/\/+$/, '')}/?mode=admin&id=${id}`;
+    const versionId = getLatestVersionId(id); // utile pour pointer la V envoyée
 
     const listId = row.clickup_list_id || await getOrCreateListByEmail(email);
     const taskName = `${meta.fileName || 'document'} ${meta.version ? `(V${meta.version})` : ''}`.trim();
@@ -328,25 +344,57 @@ app.post('/api/proofs/:id/send', async (req, res) => {
         id
       );
 
-    // Commentaire + ping Albato (best-effort)
+    // Commentaire sur ClickUp (best-effort)
     try {
       await fetch(`${CU_BASE}/task/${taskId}/comment`, {
         method: 'POST',
         headers: cuHeaders,
         body: JSON.stringify({ comment_text: `📎 Lien client\n${clientUrl}\n\n📎 Admin\n${adminUrl}\n\n📎 Fichier\n${fileUrl}` }),
       });
-      if (process.env.ALBATO_WEBHOOK_URL) {
-        await fetch(process.env.ALBATO_WEBHOOK_URL, {
+    } catch {}
+
+    // Ping Albato (webhook) + audit en base
+    if (process.env.ALBATO_WEBHOOK_URL) {
+      const sendId = nanoid(10);
+      const createdAt = new Date().toISOString();
+      const webhookPayload = {
+        event: 'BAT_SENT',
+        proofId: id,
+        versionId,
+        to: email,
+        clientUrl,
+        adminUrl,
+        fileUrl,
+        meta,
+        clickup: { taskId, listId },
+      };
+      let responseStatus = null, responseText = null;
+      try {
+        const resp = await fetch(process.env.ALBATO_WEBHOOK_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            event: 'BAT_SENT',
-            to: email, taskId, listId, proofId: id,
-            clientUrl, fileUrl, meta, adminUrl,
-          }),
+          body: JSON.stringify(webhookPayload),
         });
+        responseStatus = resp.status;
+        responseText = await resp.text().catch(()=>null);
+      } catch (e) {
+        responseStatus = 0;
+        responseText = e.message || 'webhook_call_failed';
       }
-    } catch {}
+      db.prepare(`
+        INSERT INTO proof_sends(id, proof_id, version_id, to_email, payload_json, response_status, response_text, created_at)
+        VALUES (?,?,?,?,?,?,?,?)
+      `).run(
+        sendId,
+        id,
+        versionId || null,
+        email,
+        JSON.stringify(webhookPayload),
+        responseStatus,
+        responseText,
+        createdAt
+      );
+    }
 
     res.json({ ok: true, taskId, listId, clientUrl });
   } catch (e) {
@@ -354,6 +402,7 @@ app.post('/api/proofs/:id/send', async (req, res) => {
     res.status(500).json({ error: 'server', details: e.message });
   }
 });
+
 
 // POST /api/proofs/:id/new-version { fileUrl, metaPatch? }
 app.post('/api/proofs/:id/new-version', async (req, res) => {
@@ -417,6 +466,28 @@ app.put('/api/proofs/:id/annos/:page', (req, res) => {
   `).run(verId, Number(req.params.page), JSON.stringify(annos))
   res.json({ ok: true })
 })
+// Historique des envois d'un BAT
+// GET /api/proofs/:id/sends -> { sends: [...] }
+app.get('/api/proofs/:id/sends', (req, res) => {
+  const rows = db.prepare(`
+    SELECT id, proof_id, version_id, to_email, payload_json, response_status, response_text, created_at
+    FROM proof_sends
+    WHERE proof_id=?
+    ORDER BY created_at DESC
+  `).all(req.params.id);
+  res.json({
+    sends: rows.map(r => ({
+      id: r.id,
+      versionId: r.version_id,
+      to: r.to_email,
+      status: r.response_status,
+      at: r.created_at,
+      response: r.response_text,
+      payload: JSON.parse(r.payload_json || '{}'),
+    }))
+  });
+});
+
 // ── Démarrage
 app.listen(PORT, () => {
   console.log(`API ready on port ${PORT}`)
