@@ -357,13 +357,26 @@ async function handleNewVersion() {
     <span className="seg-title">Version</span>
     <select
       value={versionId || ''}
-      onChange={…}
-      disabled={isClient} // côté client: lecture seule (conseillé)
+      onChange={(e) => {
+        const v = versions.find(x => x.id === e.target.value);
+        if (!v) return;
+        clear(); // vider les annos en mémoire avant de charger la nouvelle version
+        setVersionId(v.id);
+        setSelectedV(v.v);
+        setFile(v.fileUrl);
+        setFileKey(k => k + 1);
+        setNumPages(null);
+        setMeta(m2 => ({ ...m2, ...v.meta }));
+      }}
+      disabled={isClient} // côté client: lecture seule
     >
-      {versions.map(v => <option key={v.id} value={v.id}>V{v.v}</option>)}
+      {versions.map(v => (
+        <option key={v.id} value={v.id}>V{v.v}</option>
+      ))}
     </select>
   </div>
 )}
+
             </div>
           </div>
           
