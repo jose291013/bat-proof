@@ -291,33 +291,30 @@ app.post('/api/proofs/:id/send', async (req, res) => {
 
     const row = db.prepare('SELECT * FROM proofs WHERE id=?').get(id);
     if (!row) return res.status(404).json({ error: 'not found' });
-    const adminUrl = `${(process.env.CLIENT_BASE_URL||'').replace(/\/+$/,'')}/?mode=admin&id=${id}`
-const description = buildCuDescription({ clientUrl, adminUrl, fileUrl, meta })
+
+    // D’abord on calcule ce qui est nécessaire
     const meta = JSON.parse(row.meta_json || '{}');
     const clientUrl = buildClientUrl(id, req);
     const fileUrl = row.file_url;
+    const adminUrl = `${(process.env.CLIENT_BASE_URL || '').replace(/\/+$/, '')}/?mode=admin&id=${id}`;
 
     const listId = row.clickup_list_id || await getOrCreateListByEmail(email);
     const taskName = `${meta.fileName || 'document'} ${meta.version ? `(V${meta.version})` : ''}`.trim();
-    const description = buildCuDescription({ clientUrl, fileUrl, meta });
+    const cuDescription = buildCuDescription({ clientUrl, adminUrl, fileUrl, meta });
     const statusSent = process.env.CLICKUP_STATUS_SENT || 'BAT ENVOYÉ';
-    const payload = { name: taskName, description, priority: 3 }
-if (statusSent) payload.status = statusSent
-// ... utiliser payload à la place de { name, description, status, ...}
+
+    // Un seul payload réutilisé pour create/update
+    const payload = { name: taskName, priority: 3, description: cuDescription };
+    if (statusSent) payload.status = statusSent;
 
     let taskId = row.clickup_task_id;
     if (!taskId) {
-      const created = await cuPOST(`/list/${listId}/task`, {
-        name: taskName,
-        description,
-        status: statusSent,
-        priority: 3,
-      });
-      if (!created?.id) return res.status(502).json({ error:'clickup_create_failed', details: created });
+      const created = await cuPOST(`/list/${listId}/task`, payload);
+      if (!created?.id) return res.status(502).json({ error: 'clickup_create_failed', details: created });
       taskId = created.id;
     } else {
-      const updated = await cuPUT(`/task/${taskId}`, { name: taskName, description, status: statusSent });
-      if (updated?.err) return res.status(502).json({ error:'clickup_update_failed', details: updated });
+      const updated = await cuPUT(`/task/${taskId}`, payload);
+      if (updated?.err) return res.status(502).json({ error: 'clickup_update_failed', details: updated });
     }
 
     // Sauvegarde DB
@@ -331,21 +328,21 @@ if (statusSent) payload.status = statusSent
         id
       );
 
-    // Commentaire + ping Albato (déclencheur email)
+    // Commentaire + ping Albato (best-effort)
     try {
       await fetch(`${CU_BASE}/task/${taskId}/comment`, {
         method: 'POST',
         headers: cuHeaders,
-        body: JSON.stringify({ comment_text: `📎 Lien client\n${clientUrl}\n\n📎 Fichier\n${fileUrl}` }),
+        body: JSON.stringify({ comment_text: `📎 Lien client\n${clientUrl}\n\n📎 Admin\n${adminUrl}\n\n📎 Fichier\n${fileUrl}` }),
       });
       if (process.env.ALBATO_WEBHOOK_URL) {
         await fetch(process.env.ALBATO_WEBHOOK_URL, {
           method: 'POST',
-          headers: { 'Content-Type':'application/json' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             event: 'BAT_SENT',
             to: email, taskId, listId, proofId: id,
-            clientUrl, fileUrl, meta,
+            clientUrl, fileUrl, meta, adminUrl,
           }),
         });
       }
@@ -357,6 +354,7 @@ if (statusSent) payload.status = statusSent
     res.status(500).json({ error: 'server', details: e.message });
   }
 });
+
 // POST /api/proofs/:id/new-version { fileUrl, metaPatch? }
 app.post('/api/proofs/:id/new-version', async (req, res) => {
   const { fileUrl, metaPatch } = req.body || {}
