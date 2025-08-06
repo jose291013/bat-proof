@@ -168,9 +168,31 @@ export default function App() {
   if (!el) return
   setCurrentPage(p)                 // MAJ optimiste
   isProgScroll.current = true       // geler l’IO pendant le scroll
-  el.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+  scrollToPageEl(el)
   setTimeout(() => { isProgScroll.current = false; }, 700);
 };
+
+const [versions, setVersions] = useState([])           // [{id,v,createdAt,fileUrl,meta}]
+const [versionId, setVersionId] = useState(null)       // id technique de la version sélectionnée
+const [selectedV, setSelectedV] = useState(null)       // numéro V (1,2,3…)
+
+useEffect(() => {
+  if (!proofId) return
+  ;(async () => {
+    const r = await fetch(`${API}/api/proofs/${proofId}/versions`)
+    if (!r.ok) return
+    const { versions: vs } = await r.json()
+    setVersions(vs)
+    const last = vs[vs.length - 1]
+    if (last) {
+      setVersionId(last.id)
+      setSelectedV(last.v)
+      setFile(last.fileUrl); setFileKey(k=>k+1); setNumPages(null)
+      setMeta(m2 => ({ ...m2, ...last.meta }))
+    }
+  })()
+}, [proofId])
+
 
   
 
@@ -191,8 +213,7 @@ export default function App() {
       const res = await fetch(`${API}/api/proofs/${proofId}`)
       if (!res.ok) { console.error('Proof introuvable'); return }
       const { fileUrl, meta: m, locked: lk /*, approvedAt: ap*/ } = await res.json()
-      setFile(fileUrl); setFileKey(k => k + 1); setNumPages(null)
-      setMeta(m2 => ({ ...m2, ...m }))
+            setMeta(m2 => ({ ...m2, ...m }))
       if (lk) {
         // Si ton hook expose un setter, utilise-le. Sinon, on peut appeler approve() pour verrouiller visuellement.
         approve()
@@ -201,33 +222,35 @@ export default function App() {
   }, [proofId])
 
   // Charger les annotations existantes (option simple)
-  useEffect(() => {
-    if (!proofId || !numPages) return
-    ;(async () => {
-      for (let p = 1; p <= numPages; p++) {
-        try {
-          const r = await fetch(`${API}/api/proofs/${proofId}/annos/${p}`)
-          if (!r.ok) continue
-          const { annos } = await r.json()
-          if (Array.isArray(annos) && annos.length && (!pages[p] || pages[p].length === 0)) {
-            annos.forEach(a => add(p, a))
-          }
-        } catch {}
-      }
-    })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proofId, numPages, fileKey])
+  // Charger
+useEffect(() => {
+  if (!versionId || !numPages) return
+  ;(async () => {
+    for (let p = 1; p <= numPages; p++) {
+      try {
+        const r = await fetch(`${API}/api/versions/${versionId}/annos/${p}`)
+        if (!r.ok) continue
+        const { annos } = await r.json()
+        if (Array.isArray(annos) && annos.length && (!pages[p] || pages[p].length === 0)) {
+          annos.forEach(a => add(p, a))
+        }
+      } catch {}
+    }
+  })()
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [versionId, numPages, fileKey])
 
-  // sauvegarder la page p vers l’API
-  async function savePageToAPI(p) {
-    if (!proofId) return
-    const annos = pages[p] || []
-    await fetch(`${API}/api/proofs/${proofId}/annos/${p}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ annos })
-    }).catch(console.error)
-  }
+// Sauver
+async function savePageToAPI(p) {
+  if (!versionId) return
+  const annos = pages[p] || []
+  await fetch(`${API}/api/versions/${versionId}/annos/${p}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ annos })
+  }).catch(console.error)
+}
+
 
   // approuver côté serveur si id, sinon local
   async function handleApprove() {
@@ -245,6 +268,41 @@ export default function App() {
       alert('✅ BAT approuvé (local).')
     }
   }
+
+  // ⚠️ place ceci avec les autres fonctions (pas dans le JSX)
+async function handleNewVersion() {
+  if (!proofId) { alert('Pas d’ID BAT'); return; }
+
+  // Ici, dans la vraie vie tu appelles /api/upload et récupères {url}
+  const fileUrl = prompt('URL du PDF V+1 (démo) ?') || '';
+  if (!fileUrl) return;
+
+  const r = await fetch(`${API}/api/proofs/${proofId}/new-version`, {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json' },
+    body: JSON.stringify({ fileUrl })
+  });
+  if (!r.ok) { alert('Erreur V+1'); return; }
+
+  const { version } = await r.json();
+  alert(`V${version} créée.`);
+
+  // Recharge la liste des versions et sélectionne la dernière
+  const lst = await fetch(`${API}/api/proofs/${proofId}/versions`).then(r=>r.json());
+  setVersions(lst.versions || []);
+  const last = (lst.versions||[]).slice(-1)[0];
+  if (last) {
+    // IMPORTANT : vider les anciennes annos avant de recharger celles de la nouvelle version
+    clear();
+    setVersionId(last.id);
+    setSelectedV(last.v);
+    setFile(last.fileUrl);
+    setFileKey(k=>k+1);
+    setNumPages(null);
+    setMeta(m2=>({ ...m2, ...last.meta }));
+  }
+}
+
 
   // Actions client (placeholder)
   function handleRequestChanges() {
@@ -294,8 +352,21 @@ export default function App() {
                 <span className="badge">{currentPage || '—'}/{numPages || '—'}</span>
                 <button className="btn" onClick={()=> gotoPage((currentPage||1)+1)} disabled={!numPages || currentPage>=numPages}>›</button>
               </div>
+              {versions.length > 1 && (
+  <div className="seg" aria-label="Version">
+    <span className="seg-title">Version</span>
+    <select
+      value={versionId || ''}
+      onChange={…}
+      disabled={isClient} // côté client: lecture seule (conseillé)
+    >
+      {versions.map(v => <option key={v.id} value={v.id}>V{v.v}</option>)}
+    </select>
+  </div>
+)}
             </div>
           </div>
+          
 
           {/* Droite (ligne 2) : outils admin */}
           {!isClient && (
@@ -381,6 +452,9 @@ export default function App() {
       setToolsOpen(false);
     }} />
 </label>
+<button className="menu-item" onClick={handleNewVersion}>
+  Nouvelle version (V+1)
+</button>
 
 
                     <div className="menu-sep" />
